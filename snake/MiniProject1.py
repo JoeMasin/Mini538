@@ -5,6 +5,7 @@
 from unittest import result
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 import numpy as np
 import cv2 as cv
 import tkinter as tk
@@ -490,6 +491,27 @@ def get_pixel_values_at_snake_points(image, snake_points):
     return np.array(pixel_values)
 
 #def updateSnake(snake, internal_forces, external_forces, )
+
+def calculate_mean_intensities(snake_coords, image):
+    # Load image and convert to grayscale (if not already)
+    
+    
+    # Create a grid of coordinates
+    h, w = image.shape
+    y, x = np.mgrid[:h, :w]
+    points = np.vstack((x.ravel(), y.ravel())).T  # (width*height, 2)
+    
+    # Define the snake as a closed polygon
+    snake_path = Path(snake_coords, closed=True)
+    
+    # Determine which points are inside the snake
+    inside_mask = snake_path.contains_points(points).reshape(h, w)
+    
+    # Calculate mean intensity for inside and outside
+    inside_mean = image[inside_mask].mean()
+    outside_mean = image[~inside_mask].mean()
+    
+    return inside_mean, outside_mean
 
 def Test_Fint(): # ME
     #Read in and plot the initial data
