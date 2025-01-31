@@ -11,7 +11,8 @@ import cv2 as cv
 import tkinter as tk
 from tkinter import filedialog
 
-def load_input(): # ME
+###################################### Know it works below
+def load_input(): # 
     """
     Loads an input image or video to be processed & displays the image or video
     :return: filename: file name of input image , data: Image or movie 
@@ -83,44 +84,9 @@ def load_input(): # ME
 
     return input_file, img_grayscale
 
-def IdentMat(image): # ME
-    rows = image.shape[0]
-    columns = image.shape[1]
-    Isize = max(rows, columns)
-    I = np.identity(Isize)
-    return(I)
-
-def ForwardEulerImage(image):#, time_step, alpha, beta): ME 
-    #Space related Forward Euler Method using 2 spacial steps forward and back 
-    rows = image.shape[0]
-    columns = image.shape[1]
-    I_Mat = IdentMat(image)
-    
-    alpha = 1
-    A = [0, 1, -2, 1, 0]
-    
-    beta = 0.5
-    B = [-1, 4, -6, 4, -1]
-
-    delta_T = 1
-
-    combined = alpha@A + beta@B
-    print(combined)
-
-    combined1 = combined@delta_T
-
-    #for i in range(max(rows,columns)):
-        #print(i)
-        
-            #tobemult = image[i-2]
-    new_image = np.dot(combined1, )
-        #new_image = (I_Mat + time_step*)
-    #np.linalg.inv(result)
-    return(image)
-
 ### The internal component  is relient on the snake aka the current contour that we are deforming to match the "object" in the image 
 ### The extrenal energy is relient on the input image that we will use to deforme the snake 
-def internal_energy(snake, alpha, beta): # AI
+def internal_energy(snake, alpha, beta): # 
     """
     Compute the internal energy of a snake (active contour).
     
@@ -156,7 +122,7 @@ def internal_energy(snake, alpha, beta): # AI
     
     return E_internal
 
-def internal_force(snake, alpha, beta): # AI
+def internal_force(snake, alpha, beta): # 
     """
     Compute the internal force of a snake (active contour).
     
@@ -193,8 +159,8 @@ def internal_force(snake, alpha, beta): # AI
         F_internal[i] = elasticity + bending
     
     return F_internal
-###################################### Know it works below
-def backward_euler(snake, alpha, beta, delta_t): # AI / Fixed to work correctly 
+
+def backward_euler(snake, alpha, beta, delta_t): #  Fixed to work correctly 
     """
     Update the snake using the Backward Euler method for internal forces.
     
@@ -232,7 +198,7 @@ def backward_euler(snake, alpha, beta, delta_t): # AI / Fixed to work correctly
     
     return snake_updated
 
-def forward_euler(snake, alpha, beta, delta_t): # AI / Fixed to work correctly
+def forward_euler(snake, alpha, beta, delta_t): #  Fixed to work correctly
     """
     Update the snake using the Forward Euler method for internal forces.
     
@@ -270,7 +236,7 @@ def forward_euler(snake, alpha, beta, delta_t): # AI / Fixed to work correctly
     
     return snake_updated
 
-def backward_euler_Bint(snake, alpha, beta, delta_t): # AI / Fixed to work correctly 
+def backward_euler_Bint(snake, alpha, beta, delta_t): #  Fixed to work correctly 
     """
     Update the snake using the Backward Euler method for internal forces.
     
@@ -304,7 +270,7 @@ def backward_euler_Bint(snake, alpha, beta, delta_t): # AI / Fixed to work corre
     BE_matrix = np.linalg.inv(I - delta_t * A)
     return BE_matrix
 
-def forward_euler_Bint(snake, alpha, beta, delta_t): # AI / Fixed to work correctly
+def forward_euler_Bint(snake, alpha, beta, delta_t): #  Fixed to work correctly
     """
     Update the snake using the Forward Euler method for internal forces.
     
@@ -338,7 +304,24 @@ def forward_euler_Bint(snake, alpha, beta, delta_t): # AI / Fixed to work correc
     FE_matrix = I - delta_t * A
     
     return FE_matrix
+
+def create_circle_snake(image, radius, n_points=100):
+    # input image, radius of the snake ceneterd in the middle of the image, # of points in the snake
+
+    height, width = image.shape[:2]
+    
+    # Find the center of the image
+    center_x = width // 2
+    center_y = height // 2
+    
+    # Generate the points on the circle
+    angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
+    circle_points = np.array([(center_x + radius * np.cos(angle), center_y + radius * np.sin(angle)) 
+                              for angle in angles])
+    
+    return circle_points
 #####################################
+
 """def external_force(snake, F_internal, E_external):
     ###
     Compute the external force for the snake.
@@ -390,7 +373,7 @@ def forward_euler_Bint(snake, alpha, beta, delta_t): # AI / Fixed to work correc
     return F_external
     """
 
-def external_energy(image): # AI
+def external_energy(image): # 
     """
     Compute the external energy for the snake algorithm, which is based on the negative gradient magnitude of the image.
     
@@ -452,24 +435,6 @@ def external_force(image):
 
     #return external_force_x, external_force_y
 
-def create_circle_snake(image, radius, n_points=100):
-    # input image, radius of the snake ceneterd in the middle of the image, # of points in the snake
-
-    height, width = image.shape[:2]
-    
-    # Find the center of the image
-    center_x = width // 2
-    center_y = height // 2
-    
-    # Generate the points on the circle
-    angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
-    circle_points = np.array([(center_x + radius * np.cos(angle), center_y + radius * np.sin(angle)) 
-                              for angle in angles])
-    
-    return circle_points
-
-#def ext_int_means(snake, image):
-
 def get_pixel_values_at_snake_points(image, snake_points):
     """
     Extracts the pixel values from the image at the locations specified by the snake points.
@@ -513,7 +478,64 @@ def calculate_mean_intensities(snake_coords, image):
     
     return inside_mean, outside_mean
 
-def Test_Fint(): # ME
+def compute_mean_in_boundary(image, boundary):
+    """
+    Compute the mean value of an image inside a polygonal boundary.
+
+    Parameters:
+    - image: 2D (grayscale) or 3D (color) numpy array representing the image.
+    - boundary: Nx2 numpy array of (x, y) coordinates defining the polygon.
+
+    Returns:
+    - mean_value: Mean pixel value inside the boundary.
+    """
+    # Create an empty mask with the same dimensions as the image
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+
+    # Fill the polygon defined by the boundary with white (255)
+    cv.fillPoly(mask, [boundary.astype(np.int32)], 255)
+
+    # Use the mask to extract the region from the image
+    masked_region = cv.bitwise_and(image, image, mask=mask)
+
+    # Compute the mean value of the non-zero region
+    mean_value_in = cv.mean(image, mask=mask)
+    mean_value_out = cv.mean(image, mask=cv.bitwise_not(mask))
+    mean = cv.mean(image)
+
+    # If the image is grayscale, return the first value; if color, return all channels
+    return mean_value_in, mean_value_out, mean
+
+def external_force_N(image, snake, delta_t): #  Fixed to work correctly
+    """
+    Update the snake using the Forward Euler method for internal forces.
+    
+    Parameters:
+    snake: ndarray of shape (N, 2)
+        Coordinates of the snake's points [(x1, y1), (x2, y2), ...].
+    alpha: float
+        Weight for the elasticity term.
+    beta: float
+        Weight for the bending term.
+    delta_t: float
+        Time step.
+    
+    Returns:
+    snake_updated: ndarray of shape (N, 2)
+        Updated coordinates of the snake's points.
+    """
+    N = len(snake)
+    I = np.eye(N)
+    meanin, meanout, mean = compute_mean_in_boundary(image, snake)
+    meanin = meanin[0]
+    meanout = meanout[0]
+    Fext = 2 * (meanin - meanout) * (I - (1/2)*(meanin + meanout))
+    
+    Nmat =  np.roll(I, -2, axis=0) + np.roll(I, -1, axis=0) + I + np.roll(I, 1, axis=0) + np.roll(I, 2, axis=0)
+    
+    return Fext, Nmat
+
+def Test_Fint(): #
     #Read in and plot the initial data
     Input_FileName, Inital_data = load_input()
     plt.plot(Inital_data[:,0], Inital_data[:,1])
@@ -574,19 +596,29 @@ def Test_Fint(): # ME
 
 def main():
     Input_FileName, Inital_data = load_input()
-
-    external_energy_img = external_energy(Inital_data)
-    # Plot the result
-    plt.figure(figsize=(10, 5))
-    plt.imshow(external_energy_img, cmap='hot')
-    plt.title('External Energy (Negative Gradient)')
-    plt.axis('off')
-    plt.show()
+    
+    # Set the initial peramiters to be used for alpha, beta, and the time step 
+    alpha = 0.1  # Elasticity weight
+    beta = 0.3   # Bending weight
+    delta_t = 0.05 # Time step
+    
+    #external_energy_img = external_energy(Inital_data)
+    ### Plot the result
+    ##plt.figure(figsize=(10, 5))
+    #plt.imshow(external_energy_img, cmap='hot')
+    #plt.title('External Energy (Negative Gradient)')
+    #plt.axis('off')
+    #plt.show()
     
     image = Inital_data
     radius = 200 #tested to be a decent starting point for the "snake"
     snake = create_circle_snake(image, radius, 100)
 
+    meanin, meanout, mean = compute_mean_in_boundary(image, snake)
+    print(meanin)
+    print(meanout)
+    print(mean)
+    
     fig, axes = plt.subplots(2, 1)
 
     axes[0].imshow(image, cmap='gray')
@@ -595,25 +627,53 @@ def main():
     # Call the function to plot the snake points
     snake_values = get_pixel_values_at_snake_points(image, snake)
     axes[1].plot(snake_values)
-
+    # Add a horizontal line at y = 11
+    axes[1].axhline(y=meanin[0], color='r', linestyle='--')
+    axes[1].axhline(y=meanout[0], color='r', linestyle='--')
+    axes[1].axhline(y=mean[0], color='r', linestyle='-')
     # Adjust layout
     plt.tight_layout()
     # Show the plots
     plt.show()
-
-    magnitude , angle_rad = external_force(image)
-    # Calculate Fx and Fy from magnitude and direction
-    #angle_rad = np.radians(angle_deg)  # Convert to radians
-    Fx = magnitude * np.cos(angle_rad)  # X-component
-    Fy = magnitude * np.sin(angle_rad)  # Y-component
+    Fext, N = external_force_N(image, snake, delta_t)
     
-    plt.quiver(image[:,:], Fx, Fy, angles='xy', scale_units='xy', scale=.01, color='r')
-    print(axes)
-    plt.legend()
-    plt.title('Force Vector Plot')
-    plt.xlabel('Fx (N)')
-    plt.ylabel('Fy (N)')
-    plt.show()
+    Bint = forward_euler_Bint(snake, alpha, beta, delta_t) 
+    
+    F_int = internal_force(snake,alpha,beta)
+    
+    newsnake = Bint @ (snake + (delta_t*Fext @ F_int))
+    
+    meanin, meanout, mean = compute_mean_in_boundary(image, snake)
+    
+    for i in range(0, 100):
+        Fext, N = external_force_N(image, newsnake, delta_t)
+        
+        Bint = forward_euler_Bint(newsnake, alpha, beta, delta_t) 
+        
+        F_int = internal_force(newsnake,alpha,beta)
+        
+        newsnake = Bint @ (newsnake + (delta_t*Fext @ F_int))
+        
+        
+        
+        fig, axes = plt.subplots(2, 1)
 
-main()
-#Test_Fint()
+        axes[0].imshow(image, cmap='gray')
+        axes[0].scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
+
+        # Call the function to plot the snake points
+        snake_values = get_pixel_values_at_snake_points(image, newsnake)
+        axes[1].plot(snake_values)
+        # Add a horizontal line at y = 11
+        axes[1].axhline(y=meanin[0], color='r', linestyle='--')
+        axes[1].axhline(y=meanout[0], color='r', linestyle='--')
+        axes[1].axhline(y=mean[0], color='r', linestyle='-')
+        # Adjust layout
+        plt.tight_layout()
+        # Show the plots
+        plt.show()
+        
+    
+#main()
+Test_Fint()
+
