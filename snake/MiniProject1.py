@@ -2,6 +2,7 @@
 #import scipy 
 #import matplotlib
 #import math
+from types import new_class
 from unittest import result
 import matplotlib
 import matplotlib.pyplot as plt
@@ -452,8 +453,9 @@ def get_pixel_values_at_snake_points(image, snake_points):
         y, x = point  # Get the (y, x) coordinates
         pixel_value = image[int(y), int(x)]  # Extract the pixel value at that location
         pixel_values.append(pixel_value)
+        out = np.array(pixel_values)/255
     
-    return np.array(pixel_values)
+    return out 
 
 #def updateSnake(snake, internal_forces, external_forces, )
 
@@ -527,13 +529,65 @@ def external_force_N(image, snake, delta_t): #  Fixed to work correctly
     N = len(snake)
     I = np.eye(N)
     meanin, meanout, mean = compute_mean_in_boundary(image, snake)
-    meanin = meanin[0]
-    meanout = meanout[0]
-    Fext = 2 * (meanin - meanout) * (I - (1/2)*(meanin + meanout))
+    meanin = meanin[0]/255
+    meanout = meanout[0]/255
+    Fext = (I - (1/2)*(meanin + meanout))
     
-    Nmat =  np.roll(I, -2, axis=0) + np.roll(I, -1, axis=0) + I + np.roll(I, 1, axis=0) + np.roll(I, 2, axis=0)
+    return Fext
+
+def compute_normals(contour):
+    """
+    Compute the normal vectors for a 2D contour.
+    :param contour: A numpy array of shape (N, 2) representing the (x, y) coordinates of the contour.
+    :return: A numpy array of shape (N, 2) representing the normal vectors at each point.
+    """
+    # Compute tangent vectors using central differences
+    tangent = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
     
-    return Fext, Nmat
+    # Compute normal vectors by rotating tangent vectors by 90 degrees
+    normal = np.zeros_like(tangent)
+    normal[:, 0] = -tangent[:, 1]  # N_x = -T_y
+    normal[:, 1] = tangent[:, 0]   # N_y = T_x
+    
+    # Normalize the normal vectors
+    magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
+    magnitude[magnitude == 0] = 1  # Avoid division by zero
+    unit_normal = normal / magnitude
+    
+    return unit_normal
+
+def visualize_contour_with_normals(contour, normals, scale=1.0):
+    """
+    Visualize the contour and its normals using Matplotlib.
+    :param contour: A numpy array of shape (N, 2) representing the (x, y) coordinates of the contour.
+    :param normals: A numpy array of shape (N, 2) representing the normal vectors at each point.
+    :param scale: Scaling factor for the normal vectors (to make them longer or shorter).
+    """
+    plt.figure(figsize=(8, 8))
+    
+    # Plot the contour
+    plt.plot(contour[:, 0], contour[:, 1], 'b-', label='Contour')
+    plt.scatter(contour[:, 0], contour[:, 1], c='red', label='Points')
+    
+    # Plot the normals using quiver
+    plt.quiver(
+        contour[:, 0],  # x-coordinates of the points
+        contour[:, 1],  # y-coordinates of the points
+        normals[:, 0],  # x-components of the normals
+        normals[:, 1],  # y-components of the normals
+        angles='xy', scale_units='xy', scale=scale, color='green', label='Normals'
+    )
+    
+    # Set plot limits and labels
+    plt.xlim(np.min(contour[:, 0]) - 1, np.max(contour[:, 0]) + 1)
+    plt.ylim(np.min(contour[:, 1]) - 1, np.max(contour[:, 1]) + 1)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Contour with Normals')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 def Test_Fint(): #
     #Read in and plot the initial data
@@ -600,7 +654,7 @@ def main():
     # Set the initial peramiters to be used for alpha, beta, and the time step 
     alpha = 0.1  # Elasticity weight
     beta = 0.3   # Bending weight
-    delta_t = 0.05 # Time step
+    delta_t = 0.1 # Time step
     
     #external_energy_img = external_energy(Inital_data)
     ### Plot the result
@@ -635,26 +689,27 @@ def main():
     plt.tight_layout()
     # Show the plots
     plt.show()
-    Fext, N = external_force_N(image, snake, delta_t)
+    Fext = external_force_N(image, snake, delta_t)
     
     Bint = forward_euler_Bint(snake, alpha, beta, delta_t) 
     
-    F_int = internal_force(snake,alpha,beta)
+    Normal = compute_normals(snake)
     
-    newsnake = Bint @ (snake + (delta_t*Fext @ F_int))
+    newsnake = Bint @ (snake + (delta_t * Fext @ Normal))
     
     meanin, meanout, mean = compute_mean_in_boundary(image, snake)
+    normalstoplot = Fext @ Normal
+
+    visualize_contour_with_normals(snake, normalstoplot, scale=0.05)
     
     for i in range(0, 100):
-        Fext, N = external_force_N(image, newsnake, delta_t)
+        Fext = external_force_N(image, newsnake, delta_t)
         
         Bint = forward_euler_Bint(newsnake, alpha, beta, delta_t) 
         
-        F_int = internal_force(newsnake,alpha,beta)
+        Normal = compute_normals(newsnake)
         
-        newsnake = Bint @ (newsnake + (delta_t*Fext @ F_int))
-        
-        
+        newsnake = Bint @ (newsnake + (delta_t * np.diagonal(Fext) @ Normal))
         
         fig, axes = plt.subplots(2, 1)
 
@@ -665,15 +720,15 @@ def main():
         snake_values = get_pixel_values_at_snake_points(image, newsnake)
         axes[1].plot(snake_values)
         # Add a horizontal line at y = 11
-        axes[1].axhline(y=meanin[0], color='r', linestyle='--')
-        axes[1].axhline(y=meanout[0], color='r', linestyle='--')
-        axes[1].axhline(y=mean[0], color='r', linestyle='-')
+        axes[1].axhline(y=meanin[0]/255, color='r', linestyle='--')
+        axes[1].axhline(y=meanout[0]/255, color='r', linestyle='--')
+        axes[1].axhline(y=mean[0]/255, color='r', linestyle='-')
         # Adjust layout
         plt.tight_layout()
         # Show the plots
         plt.show()
         
     
-#main()
-Test_Fint()
+main()
+#Test_Fint()
 
