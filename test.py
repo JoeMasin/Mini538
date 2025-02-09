@@ -13,6 +13,8 @@ import cv2 as cv
 import tkinter as tk
 from tkinter import Image, filedialog
 import time
+from PIL import Image
+import skimage
 
 def load_input(): # 
     """
@@ -58,7 +60,7 @@ def load_input(): #
                     raise Exception("ERROR: Video not opened correctly")
                 
                 frames = []
-                # Read through the video frame by frame and save the individual frames 
+                # Read through the video frame by frame and save the individual frames into a variable
                 while video.isOpened():
                     ret, frame = video.read()
                     if not ret:
@@ -93,19 +95,27 @@ def compute_normals(contour):
     :return: A numpy array of shape (N, 2) representing the normal vectors at each point.
     """
     # Compute tangent vectors using central differences
-    tangent = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
+    #tangent = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
+    #
+    ## Compute normal vectors by rotating tangent vectors by 90 degrees
+    #normal = np.zeros_like(tangent)
+    #normal[:, 0] = tangent[:, 1]  # N_x = -T_y
+    #normal[:, 1] = -tangent[:, 0]   # N_y = T_x
+    #
+    ## Normalize the normal vectors
+    #magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
+    #magnitude[magnitude == 0] = 1  # Avoid division by zero
+    #unit_normal = normal / magnitude
     
-    # Compute normal vectors by rotating tangent vectors by 90 degrees
-    normal = np.zeros_like(tangent)
-    normal[:, 0] = tangent[:, 1]  # N_x = -T_y
-    normal[:, 1] = -tangent[:, 0]   # N_y = T_x
+        # calculate directions for each point in contour
+    tangents = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
+
+    # convert directions into unit normal vectors
+    normals = np.column_stack((tangents[:, 1], -tangents[:, 0]))
+    norms = np.linalg.norm(normals, axis=1, keepdims=True)
+    N = normals / norms
     
-    # Normalize the normal vectors
-    magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
-    magnitude[magnitude == 0] = 1  # Avoid division by zero
-    unit_normal = normal / magnitude
-    
-    return normal
+    return N
 
 def compute_mean_intensities(image, contour):
     """
@@ -309,27 +319,29 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
         Fexternal, update_normal = update_normals_Fext(newsnake, image)
         test = np.diag(Fexternal) @ update_normal
         #normals = update_normals(Normal, mean_inside, mean_outside, mean, contour, image)
-        newsnake =  Bint @ (newsnake + ((delta_t * np.diag(Fexternal)) @ update_normal))
+        newsnake = (newsnake + ((delta_t * np.diag(Fexternal)) @ update_normal))
+        Bint = backward_euler_Bint(newsnake, alpha, beta, delta_t)
+        newsnake = Bint @ newsnake 
 
             #Inside your iteration loop:
-        if i % 15 == 0:
+        if i % 100 == 0:
             newsnake = resample_contour(newsnake, spacing=10)
             newsnake = enforce_bounds(newsnake, image.shape)
 
-        if i % 50 == 0:
+        if i % 200 == 0:
             Fexternal, update_normal = update_normals_Fext(newsnake, image)
             test = np.diag(Fexternal) @ update_normal
             fig, axes = plt.subplots(2, 1)
 
             axes[0].imshow(image, cmap='gray')
-            axes[0].scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
+            axes[0].scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=5) 
             axes[0].plot(newsnake[:, 0], newsnake[:, 1]) 
             axes[0].quiver(
                 newsnake[:, 0],  # x-coordinates of the points
                 newsnake[:, 1],  # y-coordinates of the points
                 test[:, 0],  # x-components of the normals
                 test[:, 1],  # y-components of the normals
-                angles='xy', scale_units='xy', scale=1, color='green', label='Normals'
+                angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
             )
             mean_inside, mean_outside, mean = compute_mean_intensities(image, newsnake)
             mean_inside = mean_inside
@@ -383,22 +395,25 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
 
     return newsnake
 
+
+######################################
 def main():
     # Example usage
     # Create a synthetic image with a bright square inside a dark background
     label, data, path = load_input()
     
+    alpha = 0.15
+    beta = 0.3
+    delta_t = 0.5
+    itterations =  200 
+    pause_time = 1
+    
     if path is True:
         image = data/255
-        alpha = 0.1
-        beta = 0.3
-        delta_t = 0.25
-        itterations = 150
-        pause_time = 1
 
         # Define an initial contour (snake)
-        contour = create_circle_snake(image, 200, 100)
-
+        contour = create_circle_snake(image, 100, 100)
+        
         # Set the initial sanke values and 
         #Fexternal, update_normal = update_normals_Fext(contour, image)
         #Bint = backward_euler_Bint(contour, alpha, beta, delta_t)
@@ -419,7 +434,7 @@ def main():
             newestsnake[:, 1],  # y-coordinates of the points
             Corrrrect_dir_normal[:, 0],  # x-components of the normals
             Corrrrect_dir_normal[:, 1],  # y-components of the normals
-            angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
+            angles='xy', scale_units='xy', scale=2, color='green', label='Normals'
         )
         mean_inside, mean_outside, mean = compute_mean_intensities(image, contour)
         mean_inside = mean_inside
@@ -429,9 +444,7 @@ def main():
         plt.tight_layout()
         plt.title(f"Final: α={alpha}, β={beta}, Δt={delta_t}")
         # Show the plots
-        plt.show(block=False)
-        plt.pause(pause_time)
-        plt.close("all")
+        plt.show()
 
     elif path is False:
         video = data
@@ -441,37 +454,33 @@ def main():
         for i, frame in enumerate(video):
             if i == 0:
                 print(frame.shape)
-                contour = create_circle_snake(frame, 100, 100)
+                contour = create_circle_snake(frame, 40, 40)
                 newsnake = contour
-            if i == 100:
-                image = frame/255
-                plt.figure()
-                plt.imshow(image, cmap='gray')
-                plt.show()
+            #if i == 100:
+            #    image = frame/255
+            #    plt.figure()
+            #    plt.imshow(image, cmap='gray')
+            #    plt.show()
             
             print(f"Frame {i} shape:", frame.shape)
 
             image = frame/255
-            alpha = 0.01
-            beta = 0.6
-            delta_t = 0.25
-            itterations = 150
-            pause_time = 1
+            
 
             # Set the initial sanke values and 
             #Fexternal, update_normal = update_normals_Fext(contour, image)
             #Bint = backward_euler_Bint(contour, alpha, beta, delta_t)
             #newsnake = Bint @ (contour + ((delta_t * np.diag(Fexternal)) @  update_normal))
             newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time)
-            snakes.append(newestsnake)
-            newsnake = newestsnake
+            #snakes.append(newestsnake)
+            
 
             Fexternal, update_normal = update_normals_Fext(newestsnake, image)
             Corrrrect_dir_normal = np.diag(Fexternal) @ update_normal
 
             plt.figure()
             plt.imshow(image, cmap='gray')
-            plt.scatter(contour[:, 0], contour[:, 1], color='red', s=1) 
+            plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
             plt.plot(newestsnake[:, 0], newestsnake[:, 1]) 
             plt.quiver(
                 newestsnake[:, 0],  # x-coordinates of the points
@@ -491,9 +500,30 @@ def main():
             plt.show(block=False)
             plt.pause(pause_time)
             plt.close("all")
+            newsnake = newestsnake
+            
+            
+def save_video():
+    label, data, path = load_input()
+    video = data
+    for i, frame in enumerate(video):
+        image = frame
+        img = Image.fromarray(image)
+        img = img.convert("L")
 
-
+        # Save the image as a PNG file
+        img.save("my_image.png")
+        
+        
+        plt.figure()
+        
+        plt.imshow(image)
+        plt.savefig('my_plot.png', bbox_inches='tight', pad_inches=0)
+        plt.show()
+        
+        print(image)
+        # Create an Image object from the array
 
         
-
+#save_video()
 main()
