@@ -144,10 +144,11 @@ def compute_mean_intensities(image, contour):
     :return: A tuple (mean_inside, mean_outside) representing the mean intensities.
     """
     # Create a mask for the region inside the contour
-    closed_contour = np.vstack([contour, contour[0]])
-    rr, cc = polygon(closed_contour[:, 0], closed_contour[:, 1], image.shape)
-    mask = np.zeros_like(image, dtype=bool)
-    mask[rr, cc] = True
+    mask = skimage.draw.polygon2mask(image.shape, contour[:, ::-1])
+    #closed_contour = np.vstack([contour, contour[0]])
+    #rr, cc = polygon(closed_contour[:, 0], closed_contour[:, 1], image.shape)
+    #mask = np.zeros_like(image, dtype=bool)
+    #mask[rr, cc] = True
     
     # Compute mean intensities
     mean_inside = np.mean(image[mask])
@@ -166,10 +167,10 @@ def compute_mean(image, contour):
     """
     # Create a mask for the region inside the contour
     mask = skimage.draw.polygon2mask(image.shape, contour[:, ::-1])
-    #closed_contour = np.vstack([contour, contour[0]])  # Ensure the contour is closed
-    #rr, cc = polygon(closed_contour[:, 1], closed_contour[:, 0], image.shape)
-    #mask = np.zeros_like(image, dtype=bool)
-    #mask[rr, cc] = True
+    closed_contour = np.vstack([contour, contour[0]])  # Ensure the contour is closed
+    rr, cc = polygon(closed_contour[:, 1], closed_contour[:, 0], image.shape)
+    mask = np.zeros_like(image, dtype=bool)
+    mask[rr, cc] = True
     
     # Create masked arrays for inside and outside the contour
     image_inside = np.ma.masked_where(~mask, image)  # Mask outside the contour
@@ -182,10 +183,10 @@ def compute_mean(image, contour):
     # Compute the overall mean of the image
     mean = np.mean(image)
     
-    #plt.imshow(image, cmap='gray')
-    #plt.imshow(image_outside)
-    #
-    #plt.show
+    plt.imshow(image, cmap='gray')
+    plt.imshow(image_outside)
+    
+    plt.show
     
     return mean_inside, mean_outside, mean
 
@@ -386,7 +387,7 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
             newestsnake = resample_contour(newestsnake, spacing=15)
             newestsnake = enforce_bounds(newestsnake, image.shape)
         
-        if i % 1 == 0:
+        if i % 10 == 0:
             Fexternal, update_normal = update_normals_Fext(newestsnake, image)
             test = np.diag(Fexternal) @ update_normal
             fig, axes = plt.subplots(2, 1)
@@ -462,9 +463,9 @@ def main():
     # Create a synthetic image with a bright square inside a dark background
     label, data, path = load_input()
     
-    alpha = 0.3
-    beta = 0.15
-    delta_t = 0.1
+    alpha = 0.15
+    beta = 0.3
+    delta_t = 0.05
     itterations = 50
     pause_time = 1
     
