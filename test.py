@@ -1,19 +1,13 @@
-from statistics import NormalDist
-from turtle import update
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.draw import polygon
-from types import new_class
-from unittest import result
-import matplotlib
-import matplotlib.pyplot as plt
 from matplotlib.path import Path
-import numpy as np
 import cv2 as cv
 import tkinter as tk
 from tkinter import Image, filedialog
-import time
 from PIL import Image
+from shapely.geometry import LineString
+from scipy.ndimage import sobel
 import skimage
 
 def load_input(): # 
@@ -88,34 +82,59 @@ def load_input(): #
 
     return input_file, img_grayscale, True
 
-def compute_normals(contour):
+def compute_normals_finite_differences(contour):
     """
-    Compute the normal vectors for a 2D contour.
+    Compute the normal vectors for a 2D contour using finite differences with boundary handling.
     :param contour: A numpy array of shape (N, 2) representing the (x, y) coordinates of the contour.
     :return: A numpy array of shape (N, 2) representing the normal vectors at each point.
     """
-    # Compute tangent vectors using central differences
-    #tangent = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
-    #
-    ## Compute normal vectors by rotating tangent vectors by 90 degrees
-    #normal = np.zeros_like(tangent)
-    #normal[:, 0] = tangent[:, 1]  # N_x = -T_y
-    #normal[:, 1] = -tangent[:, 0]   # N_y = T_x
-    #
-    ## Normalize the normal vectors
-    #magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
-    #magnitude[magnitude == 0] = 1  # Avoid division by zero
-    #unit_normal = normal / magnitude
-    
-        # calculate directions for each point in contour
-    tangents = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
+    N = contour.shape[0]
+    normal = np.zeros_like(contour)
 
-    # convert directions into unit normal vectors
-    normals = np.column_stack((tangents[:, 1], -tangents[:, 0]))
-    norms = np.linalg.norm(normals, axis=1, keepdims=True)
-    N = normals / norms
+    for i in range(N):
+        # Get the previous, current, and next points
+        prev_point = contour[i - 1]  # Handles wrap-around for the first point
+        curr_point = contour[i]
+        next_point = contour[(i + 1) % N]  # Handles wrap-around for the last point
+
+        # Compute tangent vector using forward and backward differences
+        tangent_forward = next_point - curr_point
+        tangent_backward = curr_point - prev_point
+
+        # Average the forward and backward tangents for smoother results
+        tangent = 0.5 * (tangent_forward + tangent_backward)
+
+        # Compute normal vector by rotating the tangent vector by 90 degrees
+        normal[i, 0] = -tangent[1]  # N_x = -T_y
+        normal[i, 1] = tangent[0]   # N_y = T_x
+
+    # Normalize the normal vectors
+    magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
+    magnitude[magnitude == 0] = 1e-10  # Avoid division by zero
+    unit_normal = normal / magnitude
+
+    return -unit_normal
+
+def compute_normals(contour):
+    """
+    Compute the normal vectors for a 2D contour using the point before and after.
+    :param contour: A numpy array of shape (N, 2) representing the (x, y) coordinates of the contour.
+    :return: A numpy array of shape (N, 2) representing the normal vectors at each point.
+    """
+    # Compute tangent vectors using the point before and after
+    tangent = np.roll(contour, -1, axis=0) - np.roll(contour, 1, axis=0)
     
-    return N
+    # Compute normal vectors by rotating tangent vectors by 90 degrees
+    normal = np.zeros_like(tangent)
+    normal[:, 0] = -tangent[:, 1]  # N_x = -T_y
+    normal[:, 1] = tangent[:, 0]   # N_y = T_x
+    
+    # Normalize the normal vectors
+    magnitude = np.linalg.norm(normal, axis=1, keepdims=True)
+    magnitude[magnitude == 0] = 1  # Avoid division by zero
+    unit_normal = normal / magnitude
+
+    return -unit_normal
 
 def compute_mean_intensities(image, contour):
     """
@@ -125,7 +144,8 @@ def compute_mean_intensities(image, contour):
     :return: A tuple (mean_inside, mean_outside) representing the mean intensities.
     """
     # Create a mask for the region inside the contour
-    rr, cc = polygon(contour[:, 0], contour[:, 1], image.shape)
+    closed_contour = np.vstack([contour, contour[0]])
+    rr, cc = polygon(closed_contour[:, 0], closed_contour[:, 1], image.shape)
     mask = np.zeros_like(image, dtype=bool)
     mask[rr, cc] = True
     
@@ -136,38 +156,38 @@ def compute_mean_intensities(image, contour):
     
     return mean_inside, mean_outside, mean
 
-def visualize_contour_with_normals(contour, normals, scale=1.0):
+
+def compute_mean(image, contour):
     """
-    Visualize the contour and its normals using Matplotlib.
+    Compute the mean intensity inside and outside the contour.
+    :param image: A 2D numpy array representing the image.
     :param contour: A numpy array of shape (N, 2) representing the (x, y) coordinates of the contour.
-    :param normals: A numpy array of shape (N, 2) representing the normal vectors at each point.
-    :param scale: Scaling factor for the normal vectors (to make them longer or shorter).
+    :return: A tuple (mean_inside, mean_outside) representing the mean intensities.
     """
-    plt.figure(figsize=(8, 8))
+    # Create a mask for the region inside the contour
+    mask = skimage.draw.polygon2mask(image.shape, contour[:, ::-1])
+    #closed_contour = np.vstack([contour, contour[0]])  # Ensure the contour is closed
+    #rr, cc = polygon(closed_contour[:, 1], closed_contour[:, 0], image.shape)
+    #mask = np.zeros_like(image, dtype=bool)
+    #mask[rr, cc] = True
     
-    # Plot the contour
-    plt.plot(contour[:, 0], contour[:, 1], 'b-', label='Contour')
-    plt.scatter(contour[:, 0], contour[:, 1], c='red', label='Points')
+    # Create masked arrays for inside and outside the contour
+    image_inside = np.ma.masked_where(~mask, image)  # Mask outside the contour
+    image_outside = np.ma.masked_where(mask, image)  # Mask inside the contour
     
-    # Plot the normals using quiver
-    plt.quiver(
-        contour[:, 0],  # x-coordinates of the points
-        contour[:, 1],  # y-coordinates of the points
-        normals[:, 0],  # x-components of the normals
-        normals[:, 1],  # y-components of the normals
-        angles='xy', scale_units='xy', scale=scale, color='green', label='Normals'
-    )
+    # Compute mean intensities
+    mean_inside = image_inside.mean() if image_inside.count() > 0 else np.nan
+    mean_outside = image_outside.mean() if image_outside.count() > 0 else np.nan
     
-    # Set plot limits and labels
-    plt.xlim(np.min(contour[:, 0]) - 1, np.max(contour[:, 0]) + 1)
-    plt.ylim(np.min(contour[:, 1]) - 1, np.max(contour[:, 1]) + 1)
-    plt.gca().set_aspect('equal', adjustable='box')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title('Contour with Normals')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    # Compute the overall mean of the image
+    mean = np.mean(image)
+    
+    #plt.imshow(image, cmap='gray')
+    #plt.imshow(image_outside)
+    #
+    #plt.show
+    
+    return mean_inside, mean_outside, mean
 
 def create_circle_snake(image, radius, n_points=100):
     # input image, radius of the snake ceneterd in the middle of the image, # of points in the snake
@@ -223,27 +243,18 @@ def update_normals_Fext(snake , image): #  Fixed to work correctly
     snake_updated: ndarray of shape (N, 2)
         Updated coordinates of the snake's points.
     """
-    N = len(snake)
-    normals = compute_normals(snake)
+    image = image
+    normals = compute_normals_finite_differences(snake)
     values_at_snake = get_pixel_values_at_snake_points(image, snake)
-
-    mean_inside, mean_outside, mean = compute_mean_intensities(image, snake)
-    mean_inside = mean_inside
-    mean_outside = mean_outside
-    mean = mean
-    #D2 = np.roll(test, -1)  + test +  np.roll(test, 1) 
-    values_at_snake = values_at_snake
-    # Internal force matrix
-    #A = D2 / 3
-    Fext = 2 *(mean_inside - mean_outside) * ((values_at_snake) - ((1/2)*(mean_inside + mean_outside)))
-    #Fext_out = np.diagonal(Fext)
     
-    #for i in range(len(normals)):
-    #    if test[i] > mean:
-    #        normals_updated[i] = -1 * normals[i]
-    #    else:
-    #        normals_updated[i] = normals[i]
-    #Fext = Fext * 2
+    #mean_inside, mean_outside, mean = compute_mean_intensities(image, snake)
+    mean_inside, mean_outside, known = compute_mean(image, snake)
+    if np.any(np.isnan(mean_inside)):
+        raise ValueError("outside contains NaN values.")
+    if np.any(np.isnan(mean_outside)):
+        raise ValueError("outside contains NaN values.")
+    Fext = 2 *(mean_inside - mean_outside) * (((values_at_snake) - ((1/2)*(mean_inside + mean_outside))))/255
+    
     return Fext, normals
 
 def backward_euler_Bint(snake, alpha, beta, delta_t): #  Fixed to work correctly 
@@ -276,6 +287,8 @@ def backward_euler_Bint(snake, alpha, beta, delta_t): #  Fixed to work correctly
     # Internal force matrix
     A = alpha * D1 + beta * D2
     
+    print("D1:", D1)
+    print("D2:", D2)
     # Backward Euler matrix
     BE_matrix = np.linalg.inv(I - delta_t * A)
     return BE_matrix
@@ -307,48 +320,91 @@ def enforce_bounds(points, img_shape):
     points[:, 1] = np.clip(points[:, 1], 0, img_shape[0]-1)
     return points
 
+def detect_loops(contour):
+    """
+    Detect loops in the snake contour.
+    :param contour: A numpy array of shape (N, 2) representing the snake points.
+    :return: List of indices where loops occur.
+    """
+    loop_indices = []
+    n = len(contour)
+    
+    for i in range(n):
+        # Create a line segment from point i to i+1
+        line1 = LineString([contour[i], contour[(i+1)%n]])
+        
+        for j in range(i+2, n-1):
+            # Create a line segment from point j to j+1
+            line2 = LineString([contour[j], contour[(j+1)%n]])
+            
+            # Check if the two line segments intersect
+            if line1.intersects(line2):
+                loop_indices.append((i, j))
+    
+    return loop_indices
+
+def resolve_loops(contour):
+    """
+    Resolve loops in the snake contour.
+    :param contour: A numpy array of shape (N, 2) representing the snake points.
+    :return: A new contour with loops resolved.
+    """
+    loop_indices = detect_loops(contour)
+    
+    if not loop_indices:
+        return contour  # No loops detected
+    
+    # Resolve the first detected loop
+    i, j = loop_indices[0]
+    
+    # Remove the loop by reconnecting the snake
+    new_contour = np.vstack([contour[:i+1], contour[j+1:]])
+    
+    return new_contour
+
 def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time):
     
     for i in range(0, itterations):
-        #I = np.eye(N)
-        #Fext = (image - (1/2)*((mean_inside) + (mean_outside)))
-        #adjust_normals = np.diagonal(Fext)
-        Bint = backward_euler_Bint(newsnake, alpha, beta, delta_t)
-
-        #Normal = compute_normals(newsnake)
+       
+        
         Fexternal, update_normal = update_normals_Fext(newsnake, image)
-        test = np.diag(Fexternal) @ update_normal
+        if np.any(np.isnan(Fexternal)):
+            raise ValueError("Fext contains NaN values.")
+        if np.any(np.isnan(update_normal)):
+            raise ValueError("normals contains NaN values.")
+        #test = delta_t * np.diag(Fexternal) @ update_normal
         #normals = update_normals(Normal, mean_inside, mean_outside, mean, contour, image)
-        newsnake = (newsnake + ((delta_t * np.diag(Fexternal)) @ update_normal))
-        Bint = backward_euler_Bint(newsnake, alpha, beta, delta_t)
-        newsnake = Bint @ newsnake 
-
-            #Inside your iteration loop:
-        if i % 100 == 0:
-            newsnake = resample_contour(newsnake, spacing=10)
-            newsnake = enforce_bounds(newsnake, image.shape)
-
-        if i % 200 == 0:
-            Fexternal, update_normal = update_normals_Fext(newsnake, image)
+        newestsnake = (newsnake + (delta_t * (np.diag(Fexternal) @ update_normal)))
+        if np.any(np.isnan(newestsnake)):
+            raise ValueError("newestsnake contains NaN values.")
+        Bint = backward_euler_Bint(newestsnake, alpha, beta, delta_t)
+        
+        newestsnake = Bint @ newestsnake
+        
+        newestsnake = resolve_loops(newestsnake)
+        if i % 10 == 0:
+            newestsnake = resample_contour(newestsnake, spacing=15)
+            newestsnake = enforce_bounds(newestsnake, image.shape)
+        
+        if i % 1 == 0:
+            Fexternal, update_normal = update_normals_Fext(newestsnake, image)
             test = np.diag(Fexternal) @ update_normal
             fig, axes = plt.subplots(2, 1)
 
             axes[0].imshow(image, cmap='gray')
-            axes[0].scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=5) 
-            axes[0].plot(newsnake[:, 0], newsnake[:, 1]) 
+            axes[0].scatter(newestsnake[:, 0], newestsnake[:, 1], color='red', s=5) 
+            axes[0].plot(newestsnake[:, 0], newestsnake[:, 1]) 
             axes[0].quiver(
-                newsnake[:, 0],  # x-coordinates of the points
-                newsnake[:, 1],  # y-coordinates of the points
+                newestsnake[:, 0],  # x-coordinates of the points
+                newestsnake[:, 1],  # y-coordinates of the points
                 test[:, 0],  # x-components of the normals
                 test[:, 1],  # y-components of the normals
-                angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
+                angles='xy', scale_units='xy', scale=0.5, color='green', label='Normals'
             )
-            mean_inside, mean_outside, mean = compute_mean_intensities(image, newsnake)
-            mean_inside = mean_inside
-            mean_outside = mean_outside
-            mean = mean
+            mean_inside, mean_outside, mean = compute_mean_intensities(image, newestsnake)
+            
             # Call the function to plot the snake points
-            snake_values = get_pixel_values_at_snake_points(image, newsnake)
+            snake_values = get_pixel_values_at_snake_points(image, newestsnake)
             axes[1].plot(snake_values)
             # Add a horizontal line at y = 11
             axes[1].axhline(y=mean_inside, color='r', linestyle='--')
@@ -361,8 +417,12 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
             plt.show(block=False)
             plt.pause(pause_time)
             plt.close("all")
+            
+        newsnake = newestsnake
 
-
+    Fexternal, update_normal = update_normals_Fext(newestsnake, image)
+    test = np.diag(Fexternal) @ update_normal
+    
     plt.figure()
     plt.imshow(image, cmap='gray')
     plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
@@ -374,10 +434,10 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
         test[:, 1],  # y-components of the normals
         angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
     )
-    mean_inside, mean_outside, mean = compute_mean_intensities(image, newsnake)
-    mean_inside = mean_inside
-    mean_outside = mean_outside
-    mean = mean
+    #mean_inside, mean_outside, mean = compute_mean_intensities(image, newsnake)
+    #mean_inside = mean_inside
+    #mean_outside = mean_outside
+    #mean = mean
     # Call the function to plot the snake points
     #snake_values = get_pixel_values_at_snake_points(image, newsnake)
     #axes[1].plot(snake_values)
@@ -389,12 +449,12 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
     plt.tight_layout()
     plt.title(f"Iteration {i}: α={alpha}, β={beta}, Δt={delta_t}")
     # Show the plots
-    plt.show(block=False)
-    plt.pause(pause_time)
-    plt.close("all")
-
+    plt.show()
+    #plt.pause(pause_time)
+    #plt.close("all")
+    
     return newsnake
-
+    
 
 ######################################
 def main():
@@ -402,14 +462,14 @@ def main():
     # Create a synthetic image with a bright square inside a dark background
     label, data, path = load_input()
     
-    alpha = 0.15
-    beta = 0.3
-    delta_t = 0.5
-    itterations =  200 
+    alpha = 0.3
+    beta = 0.15
+    delta_t = 0.1
+    itterations = 50
     pause_time = 1
     
     if path is True:
-        image = data/255
+        image = data
 
         # Define an initial contour (snake)
         contour = create_circle_snake(image, 100, 100)
@@ -423,7 +483,7 @@ def main():
 
         # info for plotting the final output compared to input with Normal Vectors 
         Fexternal, update_normal = update_normals_Fext(newestsnake, image)
-        Corrrrect_dir_normal = np.diag(Fexternal) @ update_normal
+        Corrrrect_dir_normal = update_normal
 
         plt.figure()
         plt.imshow(image, cmap='gray')
@@ -437,9 +497,6 @@ def main():
             angles='xy', scale_units='xy', scale=2, color='green', label='Normals'
         )
         mean_inside, mean_outside, mean = compute_mean_intensities(image, contour)
-        mean_inside = mean_inside
-        mean_outside = mean_outside
-        mean = mean
 
         plt.tight_layout()
         plt.title(f"Final: α={alpha}, β={beta}, Δt={delta_t}")
@@ -454,8 +511,9 @@ def main():
         for i, frame in enumerate(video):
             if i == 0:
                 print(frame.shape)
-                contour = create_circle_snake(frame, 40, 40)
+                contour = create_circle_snake(frame, 50, 100)
                 newsnake = contour
+                print("FML")
             #if i == 100:
             #    image = frame/255
             #    plt.figure()
@@ -464,43 +522,49 @@ def main():
             
             print(f"Frame {i} shape:", frame.shape)
 
-            image = frame/255
-            
+            image = frame
+            #if i%10 == 0:
+            #    plt.figure()
+            #    plt.imshow(image, cmap='gray')
+            #    plt.title(f"Frame {i} shape:")
+            #    plt.show()
 
             # Set the initial sanke values and 
             #Fexternal, update_normal = update_normals_Fext(contour, image)
             #Bint = backward_euler_Bint(contour, alpha, beta, delta_t)
             #newsnake = Bint @ (contour + ((delta_t * np.diag(Fexternal)) @  update_normal))
-            newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time)
+            #An array where the most relative moment happens 35,40,50
+            movment_frames = np.array([1,5,25,130,135,140,145,150,155,160,165,170,240,245,250,255,260])
+            if i in movment_frames:
+                newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time)
+                newsnake = newestsnake
             #snakes.append(newestsnake)
             
+            #Fexternal, update_normal = update_normals_Fext(newestsnake, image)
+            #Corrrrect_dir_normal = np.diag(Fexternal) @ update_normal
 
-            Fexternal, update_normal = update_normals_Fext(newestsnake, image)
-            Corrrrect_dir_normal = np.diag(Fexternal) @ update_normal
-
-            plt.figure()
-            plt.imshow(image, cmap='gray')
-            plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
-            plt.plot(newestsnake[:, 0], newestsnake[:, 1]) 
-            plt.quiver(
-                newestsnake[:, 0],  # x-coordinates of the points
-                newestsnake[:, 1],  # y-coordinates of the points
-                Corrrrect_dir_normal[:, 0],  # x-components of the normals
-                Corrrrect_dir_normal[:, 1],  # y-components of the normals
-                angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
-            )
-            mean_inside, mean_outside, mean = compute_mean_intensities(image, contour)
-            mean_inside = mean_inside
-            mean_outside = mean_outside
-            mean = mean
-
-            plt.tight_layout()
-            plt.title(f"Final: α={alpha}, β={beta}, Δt={delta_t}")
-            # Show the plots
-            plt.show(block=False)
-            plt.pause(pause_time)
-            plt.close("all")
-            newsnake = newestsnake
+            #plt.figure()
+            #plt.imshow(image, cmap='gray')
+            #plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
+            #plt.plot(newestsnake[:, 0], newestsnake[:, 1]) 
+            #plt.quiver(
+            #    newestsnake[:, 0],  # x-coordinates of the points
+            #    newestsnake[:, 1],  # y-coordinates of the points
+            #    Corrrrect_dir_normal[:, 0],  # x-components of the normals
+            #    Corrrrect_dir_normal[:, 1],  # y-components of the normals
+            #    angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
+            #)
+            #mean_inside, mean_outside, mean = compute_mean_intensities(image, contour)
+            #mean_inside = mean_inside
+            #mean_outside = mean_outside
+            #mean = mean
+#
+            #plt.tight_layout()
+            #plt.title(f"Final: α={alpha}, β={beta}, Δt={delta_t}")
+            ## Show the plots
+            #plt.show(block=False)
+            #plt.pause(pause_time)
+            #plt.close("all")
             
             
 def save_video():
