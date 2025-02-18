@@ -190,6 +190,7 @@ def compute_mean(image, contour):
     
     return mean_inside, mean_outside, mean
 
+
 def create_circle_snake(image, radius, n_points=100):
     # input image, radius of the snake ceneterd in the middle of the image, # of points in the snake
 

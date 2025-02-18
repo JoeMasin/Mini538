@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
+import matplotlib.animation as animation
 import cv2 as cv
 import tkinter as tk
 from tkinter import Image, filedialog
@@ -111,7 +112,7 @@ def compute_mean(image, contour):
     #plt.imshow(image, cmap='gray')
     #plt.imshow(image_outside)
     
-    #plt.show
+    #plt.show()
     
     return mean_inside, mean_outside, mean
 
@@ -344,7 +345,7 @@ def resolve_loops(contour):
     
     return new_contour
 
-def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time):
+def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time, gifitter):
     
     for i in range(0, itterations):
        
@@ -359,86 +360,87 @@ def Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_tim
             newestsnake = resample_contour(newestsnake, spacing=15)
             newestsnake = enforce_bounds(newestsnake, image.shape)
         
-        if i % 10 == 0:
+        #if i % 10 == 0:
             
-            Fexternal, update_normal = update_normals_Fext(newestsnake, image)
-            test = np.diag(Fexternal) @ update_normal
-            
-            fig, axes = plt.subplots(2, 1)
-
-            axes[0].imshow(image, cmap='gray')
-            axes[0].scatter(newestsnake[:, 0], newestsnake[:, 1], color='red', s=5) 
-            axes[0].plot(newestsnake[:, 0], newestsnake[:, 1]) 
-            axes[0].quiver(
-                newestsnake[:, 0],  # x-coordinates of the points
-                newestsnake[:, 1],  # y-coordinates of the points
-                test[:, 0],  # x-components of the normals
-                test[:, 1],  # y-components of the normals
-                angles='xy', scale_units='xy', scale=0.5, color='green', label='Normals'
-            )
-            mean_inside, mean_outside, mean = compute_mean(image, newestsnake)
-            
-            # Call the function to get values at snake points for plotting
-            snake_values = get_pixel_values_at_snake_points(image, newestsnake)
-            axes[1].plot(snake_values)
-            # Add a horizontal line at y = 11
-            axes[1].axhline(y=mean_inside, color='r', linestyle='--')
-            axes[1].axhline(y=mean_outside, color='r', linestyle='--')
-            axes[1].axhline(y=mean, color='r', linestyle='-')
-            # Adjust layout
-            plt.tight_layout()
-            plt.title(f"Iteration {i}: α={alpha}, β={beta}, Δt={delta_t}")
-            # Show the plots
-            plt.show(block=False)
-            plt.pause(pause_time)
-            plt.close("all")
+        Fexternal, update_normal = update_normals_Fext(newestsnake, image)
+        test = np.diag(Fexternal) @ update_normal
+        
+        fig, axes = plt.subplots(2, 1)
+        axes[0].imshow(image, cmap='gray')
+        axes[0].scatter(newestsnake[:, 0], newestsnake[:, 1], color='red', s=5) 
+        axes[0].plot(newestsnake[:, 0], newestsnake[:, 1]) 
+        axes[0].quiver(
+            newestsnake[:, 0],  # x-coordinates of the points
+            newestsnake[:, 1],  # y-coordinates of the points
+            test[:, 0],  # x-components of the normals
+            test[:, 1],  # y-components of the normals
+            angles='xy', scale_units='xy', scale=0.5, color='green', label='Normals'
+        )
+        mean_inside, mean_outside, mean = compute_mean(image, newestsnake)
+        
+        # Call the function to get values at snake points for plotting
+        snake_values = get_pixel_values_at_snake_points(image, newestsnake)
+        axes[1].plot(snake_values)
+        axes[1].axhline(y=mean_inside, color='r', linestyle='--')
+        axes[1].axhline(y=mean_outside, color='r', linestyle='--')
+        axes[1].axhline(y=mean, color='r', linestyle='-')
+        # Adjust layout
+        plt.tight_layout()
+        plt.title(f"Iteration {i}: α={alpha}, β={beta}, Δt={delta_t}")
+        # Show the plots
+            # Save with dynamic filename
+        #filename = f"gifpngs/image_{gifitter}{i}.png"  # Automatically updates the filename with the loop index
+        #plt.savefig(filename, format="png")
+        #plt.clf()  # Clear the figure to avoid overwriting the same plot
+        plt.show()#plt.show(block=False)
+        #plt.pause(pause_time)
+        #plt.close("all")
             
         newsnake = newestsnake
 
-    Fexternal, update_normal = update_normals_Fext(newestsnake, image)
-    test = np.diag(Fexternal) @ update_normal
-    
-    plt.figure()
-    plt.imshow(image, cmap='gray')
-    plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
-    plt.plot(newsnake[:, 0], newsnake[:, 1]) 
-    plt.quiver(
-        newsnake[:, 0],  # x-coordinates of the points
-        newsnake[:, 1],  # y-coordinates of the points
-        test[:, 0],  # x-components of the normals
-        test[:, 1],  # y-components of the normals
-        angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
-    )
-    mean_inside, mean_outside, mean = compute_mean(image, newsnake)
-    mean_inside = mean_inside
-    mean_outside = mean_outside
-    mean = mean
-    # Call the function to plot the snake points
-    snake_values = get_pixel_values_at_snake_points(image, newsnake)
-    axes[1].plot(snake_values)
-    
-    axes[1].axhline(y=mean_inside, color='r', linestyle='--')
-    axes[1].axhline(y=mean_outside, color='r', linestyle='--')
-    axes[1].axhline(y=mean, color='r', linestyle='-')
-    # Adjust layout
-    plt.tight_layout()
-    plt.title(f"Iteration {i}: α={alpha}, β={beta}, Δt={delta_t}")
-    # Show the plots
-    plt.show()
+    #Fexternal, update_normal = update_normals_Fext(newestsnake, image)
+    #test = np.diag(Fexternal) @ update_normal
+    #
+    #plt.figure()
+    #plt.imshow(image, cmap='gray')
+    #plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
+    #plt.plot(newsnake[:, 0], newsnake[:, 1]) 
+    #plt.quiver(
+    #    newsnake[:, 0],  # x-coordinates of the points
+    #    newsnake[:, 1],  # y-coordinates of the points
+    #    test[:, 0],  # x-components of the normals
+    #    test[:, 1],  # y-components of the normals
+    #    angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
+    #)
+    #mean_inside, mean_outside, mean = compute_mean(image, newsnake)
+    #mean_inside = mean_inside
+    #mean_outside = mean_outside
+    #mean = mean
+    ## Call the function to plot the snake points
+    #snake_values = get_pixel_values_at_snake_points(image, newsnake)
+    #axes[1].plot(snake_values)
+    #
+    #axes[1].axhline(y=mean_inside, color='r', linestyle='--')
+    #axes[1].axhline(y=mean_outside, color='r', linestyle='--')
+    #axes[1].axhline(y=mean, color='r', linestyle='-')
+    ## Adjust layout
+    #plt.tight_layout()
+    #plt.title(f"Iteration {i}: α={alpha}, β={beta}, Δt={delta_t}")
+    ## Show the plots
+    #plt.show()
     #plt.pause(pause_time)
     #plt.close("all")
     
     return newsnake
 
 def main():
-    # Example usage
-    # Create a synthetic image with a bright square inside a dark background
+    
     label, data, path = load_input()
     
     alpha = 0.15
     beta = 0.3
     delta_t = 0.05
-    itterations = 50
+    itterations = 75
     pause_time = 1
     
     if path is True:
@@ -449,7 +451,7 @@ def main():
         
         # Set the initial sanke values and compute new snake
         newsnake = contour
-        newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time)
+        newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time, 0)
 
         # info for plotting the final output compared to input with Normal Vectors 
         Fexternal, update_normal = update_normals_Fext(newestsnake, image)
@@ -477,51 +479,28 @@ def main():
         video = data
         # Define an initial contour (snake)
         snakes = []
-        
+        giffitter = 0
         for i, frame in enumerate(video):
             if i == 0:
                 print(frame.shape)
-                contour = create_circle_snake(frame, 50, 100)
+                contour = create_circle_snake(frame, 100, 100)
                 newsnake = contour
             
             print(f"Frame {i} shape:", frame.shape)
 
             image = frame
             
-            #An array where the most relative moment happens 35,40,50
-            movment_frames = np.array([1,5,25,130,135,140,145,150,155,160,165,170,240,245,250,255,260])
+            #An array where the most relative moment happens 5,35,40,50,135,140,155,160,165,255,260
+            movment_frames = np.array([1,25,130,145,150,170,240,245,250])
             if i in movment_frames:
-                newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time)
+                newestsnake = Active_Contour(alpha, beta, delta_t, newsnake, image, itterations, pause_time, giffitter)
                 newsnake = newestsnake
-            #snakes.append(newestsnake)
+                giffitter += 1
             
-            #Fexternal, update_normal = update_normals_Fext(newestsnake, image)
-            #Corrrrect_dir_normal = np.diag(Fexternal) @ update_normal
 
-            #plt.figure()
-            #plt.imshow(image, cmap='gray')
-            #plt.scatter(newsnake[:, 0], newsnake[:, 1], color='red', s=1) 
-            #plt.plot(newestsnake[:, 0], newestsnake[:, 1]) 
-            #plt.quiver(
-            #    newestsnake[:, 0],  # x-coordinates of the points
-            #    newestsnake[:, 1],  # y-coordinates of the points
-            #    Corrrrect_dir_normal[:, 0],  # x-components of the normals
-            #    Corrrrect_dir_normal[:, 1],  # y-components of the normals
-            #    angles='xy', scale_units='xy', scale=0.2, color='green', label='Normals'
-            #)
-            #mean_inside, mean_outside, mean = compute_mean_intensities(image, contour)
-            #mean_inside = mean_inside
-            #mean_outside = mean_outside
-            #mean = mean
-            #plt.tight_layout()
-            #plt.title(f"Final: α={alpha}, β={beta}, Δt={delta_t}")
-            ## Show the plots
-            #plt.show(block=False)
-            #plt.pause(pause_time)
-            #plt.close("all")
-            
-            
-def save_video():
+
+
+def save_image():
     label, data, path = load_input()
     video = data
     for i, frame in enumerate(video):
@@ -541,7 +520,11 @@ def save_video():
         
         print(image)
         # Create an Image object from the array
+ 
+def test():
+    
+    label, data, path = load_input() 
 
-        
-#save_video()
+#test()  
+#save_image()
 main()
